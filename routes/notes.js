@@ -10,13 +10,23 @@ const data = require('../db/notes');
 const simDB = require('../db/simDB');
 const notes = simDB.initialize(data);
 
+// Postgres via knex
+const knex = require('../knex');
+
 // Get All (and search by query)
 router.get('/', (req, res, next) => {
   const { searchTerm } = req.query;
 
-  notes.filter(searchTerm)
-    .then(list => {
-      res.json(list);
+  knex('notes')
+    .select()
+    .modify(function (queryBuilder) {
+      if (searchTerm) {
+        queryBuilder.where('title', 'like', `%${searchTerm}%`);
+      }
+    })
+    .orderBy('notes.id')
+    .then(results => {
+      res.json(results);
     })
     .catch(err => {
       next(err);
@@ -25,9 +35,11 @@ router.get('/', (req, res, next) => {
 
 // Get a single item
 router.get('/:id', (req, res, next) => {
-  const id = req.params.id;
+  const noteId = req.params.id;
 
-  notes.find(id)
+  knex('notes')
+    .first()
+    .where({ id: noteId })
     .then(item => {
       if (item) {
         res.json(item);
@@ -42,7 +54,7 @@ router.get('/:id', (req, res, next) => {
 
 // Put update an item
 router.put('/:id', (req, res, next) => {
-  const id = req.params.id;
+  const noteId = req.params.id;
 
   /***** Never trust users - validate input *****/
   const updateObj = {};
@@ -61,8 +73,11 @@ router.put('/:id', (req, res, next) => {
     return next(err);
   }
 
-  notes.update(id, updateObj)
-    .then(item => {
+  knex('notes')
+    .update(updateObj)
+    .where({ id: noteId })
+    .returning(['id', 'title', 'content'])
+    .then(([item]) => {
       if (item) {
         res.json(item);
       } else {
@@ -86,8 +101,10 @@ router.post('/', (req, res, next) => {
     return next(err);
   }
 
-  notes.create(newItem)
-    .then(item => {
+  knex('notes')
+    .insert(newItem)
+    .returning(['id', 'title', 'content'])
+    .then(([item]) => {
       if (item) {
         res.location(`http://${req.headers.host}/notes/${item.id}`).status(201).json(item);
       }
@@ -101,7 +118,9 @@ router.post('/', (req, res, next) => {
 router.delete('/:id', (req, res, next) => {
   const id = req.params.id;
 
-  notes.delete(id)
+  knex('notes')
+    .where({ id: id })
+    .del()
     .then(() => {
       res.sendStatus(204);
     })
