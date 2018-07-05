@@ -6,9 +6,9 @@ const express = require('express');
 const router = express.Router();
 
 // TEMP: Simple In-Memory Database
-const data = require('../db/notes');
-const simDB = require('../db/simDB');
-const notes = simDB.initialize(data);
+// const data = require('../db/notes');
+// const simDB = require('../db/simDB');
+// const notes = simDB.initialize(data);
 
 // Postgres via knex
 const knex = require('../knex');
