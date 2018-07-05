@@ -1,41 +1,27 @@
 'use strict';
 
 const express = require('express');
-
-// Postgres via knex
 const knex = require('../knex');
 
-// Create an router instance (aka "mini-app")
 const router = express.Router();
 
-
-// Get All (and search by query)
+// Get All Folders (no search filter needed)
 router.get('/', (req, res, next) => {
-  const { searchTerm } = req.query;
-
-  knex('notes')
-    .select()
-    .modify(function (queryBuilder) {
-      if (searchTerm) {
-        queryBuilder.where('title', 'like', `%${searchTerm}%`);
-      }
-    })
-    .orderBy('notes.id')
+  knex('folders')
+    .select('id', 'name')
     .then(results => {
       res.json(results);
     })
-    .catch(err => {
-      next(err);
-    });
+    .catch(err => next(err));
 });
 
-// Get a single item
+// Get Folder by id
 router.get('/:id', (req, res, next) => {
-  const noteId = req.params.id;
+  const id = req.params.id;
 
-  knex('notes')
+  knex('folders')
     .first()
-    .where({ id: noteId })
+    .where({ id: id })
     .then(item => {
       if (item) {
         res.json(item);
@@ -48,13 +34,14 @@ router.get('/:id', (req, res, next) => {
     });
 });
 
-// Put update an item
+
+// Update Folder (The noteful app does not use this endpoint but we'll create it in order to round out our API)
 router.put('/:id', (req, res, next) => {
-  const noteId = req.params.id;
+  const folderId = req.params.id;
 
   /***** Never trust users - validate input *****/
   const updateObj = {};
-  const updateableFields = ['title', 'content'];
+  const updateableFields = ['name'];
 
   updateableFields.forEach(field => {
     if (field in req.body) {
@@ -63,17 +50,17 @@ router.put('/:id', (req, res, next) => {
   });
 
   /***** Never trust users - validate input *****/
-  if (!updateObj.title) {
-    const err = new Error('Missing `title` in request body');
-    err.status = 400;
+  if (!updateObj.name) {
+    const err = new Error('Missing `name` in request body');
+    err.status(400);
     return next(err);
   }
 
-  knex('notes')
+  knex('folders')
     .update(updateObj)
-    .where({ id: noteId })
-    .returning(['id', 'title', 'content'])
-    .then(([item]) => {
+    .where({ id: folderId })
+    .returning(['id', 'name'])
+    .then((item) => {
       if (item) {
         res.json(item);
       } else {
@@ -85,24 +72,24 @@ router.put('/:id', (req, res, next) => {
     });
 });
 
-// Post (insert) an item
+// Create a Folder (accepts an object with a `name` and inserts it in the DB. Returns the new item along with the new id)
 router.post('/', (req, res, next) => {
-  const { title, content } = req.body;
+  const { name } = req.body;
 
-  const newItem = { title, content };
+  const newItem = { name };
   /***** Never trust users - validate input *****/
-  if (!newItem.title) {
-    const err = new Error('Missing `title` in request body');
+  if (!newItem.name) {
+    const err = new Error('Missing `name` in request body');
     err.status = 400;
     return next(err);
   }
 
-  knex('notes')
+  knex('folders')
     .insert(newItem)
-    .returning(['id', 'title', 'content'])
+    .returning(['id', 'name'])
     .then(([item]) => {
       if (item) {
-        res.location(`http://${req.headers.host}/notes/${item.id}`).status(201).json(item);
+        res.location(`http://${req.headers.host}/folders/${item.id}`).status(201).json(item);
       }
     })
     .catch(err => {
@@ -110,11 +97,11 @@ router.post('/', (req, res, next) => {
     });
 });
 
-// Delete an item
+// Delete Folder By Id (accepts an ID and deletes the folder from the DB and then returns a 204 status)
 router.delete('/:id', (req, res, next) => {
   const id = req.params.id;
 
-  knex('notes')
+  knex('folders')
     .where({ id: id })
     .del()
     .then(() => {
