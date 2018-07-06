@@ -1,13 +1,9 @@
 'use strict';
 
 const express = require('express');
-
-// Postgres via knex
 const knex = require('../knex');
-
 const hydrateNotes = require('../utils/hydrateNotes');
 
-// Create an router instance (aka "mini-app")
 const router = express.Router();
 
 
@@ -35,7 +31,18 @@ router.get('/', (req, res, next) => {
         queryBuilder.where('tag_id', tagId);
       }
     })
-    .orderBy('notes.id')
+    .then((results) => {
+      // make an array of objects `{notes.id: noteId}`
+      // to be our new where clause
+      const noteQueryIds = results.map(note => (note.id));
+      return knex('notes')
+        .select('notes.id', 'title', 'content', 'notes.created', 'folders.id as folderId', 'folders.name as folderName', 'tags.id as tagId', 'tags.name as tagName')
+        .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .leftJoin('notes_tags', 'notes.id', 'notes_tags.note_id')
+        .leftJoin('tags', 'notes_tags.tag_id', 'tags.id')
+        .whereIn('notes.id', noteQueryIds)
+        .orderBy('notes.id');
+    })
     .then(results => {
       const hydrated = hydrateNotes(results);
       res.json(hydrated);
@@ -75,8 +82,12 @@ router.put('/:id', (req, res, next) => {
   const reqBody = {
     title: req.body.title,
     content: req.body.content,
-    folder_id: req.body.folderId
   };
+
+  // Add folderId to reqBody as an Integer only if it exists
+  if (req.body.folderId) {
+    reqBody.folder_id = parseInt(req.body.folderId);
+  }
 
   /***** Never trust users - validate input *****/
   if (!Array.isArray(tags)) {
@@ -105,7 +116,7 @@ router.put('/:id', (req, res, next) => {
   knex('notes')
     .update(updateObj)
     .where({ id: noteId })
-    // .returning('id')
+    .returning('id')
     .then(() => {
       // DELETE current related tags from notes_tags table
       return knex('notes_tags')
